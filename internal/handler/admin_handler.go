@@ -10,11 +10,15 @@ import (
 )
 
 type AdminHandler struct {
-	inviteService service.InviteService
+	inviteService     service.InviteService
+	oidcClientService service.OIDCClientService
 }
 
-func NewAdminHandler(inviteService service.InviteService) *AdminHandler {
-	return &AdminHandler{inviteService: inviteService}
+func NewAdminHandler(inviteService service.InviteService, oidcClientService service.OIDCClientService) *AdminHandler {
+	return &AdminHandler{
+		inviteService:     inviteService,
+		oidcClientService: oidcClientService,
+	}
 }
 
 type CreateInviteCodeRequest struct {

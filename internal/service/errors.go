@@ -15,4 +15,7 @@ var (
 	ErrCannotUnbindLast      = errors.New("cannot unbind last identity")
 	ErrIdentityNotOwned      = errors.New("identity does not belong to this user")
 	ErrUnsupportedIdentity   = errors.New("unsupported identity type for direct login")
+	ErrOIDCClientNotFound    = errors.New("oidc client not found")
+	ErrOIDCClientExists      = errors.New("oidc client already exists")
+	ErrOIDCClientInvalid     = errors.New("invalid oidc client input")
 )

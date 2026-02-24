@@ -100,6 +100,13 @@ func SetupRouter(
 		{
 			admin.POST("/invite-codes", adminHandler.CreateInviteCode)
 			admin.GET("/invite-codes", adminHandler.ListInviteCodes)
+
+			admin.POST("/oidc-clients", adminHandler.CreateOIDCClient)
+			admin.GET("/oidc-clients", adminHandler.ListOIDCClients)
+			admin.GET("/oidc-clients/:client_id", adminHandler.GetOIDCClient)
+			admin.PUT("/oidc-clients/:client_id", adminHandler.UpdateOIDCClient)
+			admin.DELETE("/oidc-clients/:client_id", adminHandler.DeleteOIDCClient)
+			admin.POST("/oidc-clients/:client_id/rotate-secret", adminHandler.RotateOIDCClientSecret)
 		}
 	}
 

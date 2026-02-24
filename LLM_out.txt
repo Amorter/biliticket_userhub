@@ -1,14 +1,29 @@
 ## biliticket_userhub 项目快照（2026-02-24）
 
-Go + Gin 的 CIAM 后端，支持统一认证、身份绑定、OIDC Provider、OAuth2 社交登录和 Passkey。
+Go + Gin 的 CIAM 后端，支持统一认证、身份绑定、OIDC Provider、OAuth2 社交登录、Passkey，以及管理员 OIDC Client 管理 API。
 
-### 新增内容
-- 已新增 `README.md`：面向人类的开发与使用文档，覆盖
-  - 5 分钟本地启动
-  - 配置与环境变量覆盖
-  - API 使用示例（Auth / Identity / OAuth2 / Passkey / Admin）
-  - OIDC 接入端到端流程
-  - 状态键规范与已知注意事项
+### 本轮新增
+1. 完善 OIDC Client 管理能力（Admin API）
+   - `POST /api/v1/admin/oidc-clients` 创建 client（可自动生成 secret）
+   - `GET /api/v1/admin/oidc-clients` 列表
+   - `GET /api/v1/admin/oidc-clients/:client_id` 详情
+   - `PUT /api/v1/admin/oidc-clients/:client_id` 更新
+   - `DELETE /api/v1/admin/oidc-clients/:client_id` 删除
+   - `POST /api/v1/admin/oidc-clients/:client_id/rotate-secret` 轮换密钥
+2. 新增 service 层 `internal/service/oidc_client_service.go`
+   - client_id/name/redirect_uris/scopes 校验
+   - 默认 scopes（创建时未传）: `openid profile email offline_access`
+   - scopes 必须包含 `openid`
+   - redirect URI 校验（含 fragment 拒绝）
+3. 新增 handler `internal/handler/admin_oidc_client_handler.go`
+   - 错误映射：400/404/409/500
+4. 路由注册更新 `internal/handler/router.go`
+5. 入口注入更新 `cmd/main.go`
+6. README 更新：管理员 API 与 OIDC 接入流程改为 API 优先
+7. 新增 Postman 导入文件（全量 API）
+   - `postman/biliticket_userhub.postman_collection.json`
+   - 覆盖公开/受保护/管理员/OIDC Provider 全部路由
+   - 内置 collection variables（baseUrl/token/client/session 等）与关键接口自动提取脚本
 
 ### 技术栈
 - Go 1.25
@@ -35,6 +50,7 @@ Go + Gin 的 CIAM 后端，支持统一认证、身份绑定、OIDC Provider、O
   - `oauth2_service`: github/google 授权与回调，state 防 CSRF
   - `webauthn_service`: passkey 注册/登录
   - `invite_service`: 管理员邀请码
+  - `oidc_client_service`: OIDC 客户端 CRUD + rotate secret + 校验
 - `internal/oidc`
   - `provider.go` + `storage.go` + `client.go` + `auth_request.go`
   - 提供标准 OIDC 端点并桥接本地仓储
@@ -64,6 +80,12 @@ Go + Gin 的 CIAM 后端，支持统一认证、身份绑定、OIDC Provider、O
 管理员路由（JWT + admin 白名单）：
 - `POST /api/v1/admin/invite-codes`
 - `GET /api/v1/admin/invite-codes`
+- `POST /api/v1/admin/oidc-clients`
+- `GET /api/v1/admin/oidc-clients`
+- `GET /api/v1/admin/oidc-clients/:client_id`
+- `PUT /api/v1/admin/oidc-clients/:client_id`
+- `DELETE /api/v1/admin/oidc-clients/:client_id`
+- `POST /api/v1/admin/oidc-clients/:client_id/rotate-secret`
 
 OIDC Provider：
 - `/oidc/.well-known/openid-configuration`
@@ -88,6 +110,7 @@ OIDC Provider：
 3. Refresh token 使用 StateStore 记录 JTI，刷新即轮转，旧 token 失效。
 4. OAuth2 登录不会自动按邮箱合并账号，必须已有绑定身份。
 5. Passkey finish 接口读取 WebAuthn 原始 body，`session_id` 走 query。
+6. OIDC Client 的 secret 仅在“创建/轮换”接口返回，列表与详情不回显。
 
 ### 主要配置块（config.yaml）
 - `server`
@@ -105,6 +128,6 @@ OIDC Provider：
 
 ### 当前已知注意事项
 1. OIDC 签名 RSA key 目前进程内生成，重启后会变化（未持久化）。
-2. `oidc_clients.client_secret` 当前是明文比对。
+2. `oidc_clients.client_secret` 当前是明文比对（建议后续改哈希存储）。
 3. OAuth2 登录与绑定共享同一个 `redirect_url` 配置，双流程同时启用时需要前端/配置配合。
 4. `invite.enabled=true` 时，首个管理员引导需要先做初始化策略（例如临时关闭邀请码）。

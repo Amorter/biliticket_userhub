@@ -111,7 +111,8 @@ func main() {
 
 	// Invite & admin
 	inviteService := service.NewInviteService(inviteRepo)
-	adminHandler := handler.NewAdminHandler(inviteService)
+	oidcClientService := service.NewOIDCClientService(oidcClientRepo)
+	adminHandler := handler.NewAdminHandler(inviteService, oidcClientService)
 
 	// 10. Initialize OIDC Provider
 	oidcProvider, oidcStorage, err := oidcmod.SetupProvider(

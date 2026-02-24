@@ -18,7 +18,7 @@
 | OAuth2 社交登录 | 已支持 | GitHub / Google，基于 state 防 CSRF |
 | Passkey 登录/注册 | 已支持 | Discoverable Login，挑战信息入 StateStore |
 | OIDC Provider | 已支持 | 基于 `zitadel/oidc`，提供 `/oidc/*` 标准端点 |
-| OIDC Client 管理 API | 未提供 | 当前需直接写数据库 `oidc_clients` |
+| OIDC Client 管理 API | 已支持 | 管理员接口支持增删改查与密钥轮换 |
 
 ## 目录结构
 
@@ -241,7 +241,7 @@ curl -i 'http://127.0.0.1:8080/api/v1/auth/oauth2/github/authorize'
 
 说明：`finish` 接口读取的是 WebAuthn 标准请求体，`session_id` 在 query 中传递。
 
-### 5) 管理员接口（邀请码）
+### 5) 管理员接口（邀请码与 OIDC Client）
 
 创建邀请码：
 
@@ -259,9 +259,71 @@ curl http://127.0.0.1:8080/api/v1/admin/invite-codes \
   -H 'Authorization: Bearer <admin_access_token>'
 ```
 
+创建 OIDC Client（`client_secret` 可省略，省略时自动生成）：
+
+```bash
+curl -X POST http://127.0.0.1:8080/api/v1/admin/oidc-clients \
+  -H 'Authorization: Bearer <admin_access_token>' \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "client_id":"demo-client",
+    "name":"Demo App",
+    "redirect_uris":["http://localhost:3000/oidc/callback"],
+    "allowed_scopes":["openid","profile","email","offline_access"],
+    "is_first_party":true
+  }'
+```
+
+查询与更新 OIDC Client：
+
+```bash
+curl http://127.0.0.1:8080/api/v1/admin/oidc-clients \
+  -H 'Authorization: Bearer <admin_access_token>'
+
+curl http://127.0.0.1:8080/api/v1/admin/oidc-clients/demo-client \
+  -H 'Authorization: Bearer <admin_access_token>'
+
+curl -X PUT http://127.0.0.1:8080/api/v1/admin/oidc-clients/demo-client \
+  -H 'Authorization: Bearer <admin_access_token>' \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "name":"Demo App v2",
+    "redirect_uris":["http://localhost:3000/oidc/callback"],
+    "allowed_scopes":["openid","profile","email","offline_access"],
+    "is_first_party":true
+  }'
+```
+
+轮换密钥与删除：
+
+```bash
+curl -X POST http://127.0.0.1:8080/api/v1/admin/oidc-clients/demo-client/rotate-secret \
+  -H 'Authorization: Bearer <admin_access_token>'
+
+curl -X DELETE http://127.0.0.1:8080/api/v1/admin/oidc-clients/demo-client \
+  -H 'Authorization: Bearer <admin_access_token>'
+```
+
 ## OIDC 接入指南（给业务应用）
 
-### 1) 先创建 OIDC Client（当前通过 SQL）
+### 1) 先创建 OIDC Client（推荐用管理员 API）
+
+```bash
+curl -X POST http://127.0.0.1:8080/api/v1/admin/oidc-clients \
+  -H 'Authorization: Bearer <admin_access_token>' \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "client_id":"demo-client",
+    "name":"Demo App",
+    "redirect_uris":["http://localhost:3000/oidc/callback"],
+    "allowed_scopes":["openid","profile","email","offline_access"],
+    "is_first_party":true
+  }'
+```
+
+创建成功后会返回 `client_secret`（仅创建或轮换时返回），请妥善保存。
+
+调试时也可以直接 SQL 写入：
 
 ```sql
 INSERT INTO oidc_clients (

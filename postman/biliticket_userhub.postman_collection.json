@@ -1,0 +1,761 @@
+{
+  "info": {
+    "_postman_id": "cb0841d8-7542-4a79-8e24-c8e63917f9be",
+    "name": "BiliTicket UserHub API (All)",
+    "description": "Full API collection for biliticket_userhub: public auth, protected APIs, admin APIs, and OIDC provider endpoints.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://127.0.0.1:8080" },
+    { "key": "provider", "value": "github" },
+    { "key": "identifier", "value": "alice@example.com" },
+    { "key": "password", "value": "S3cret1234" },
+    { "key": "inviteCode", "value": "" },
+    { "key": "accessToken", "value": "" },
+    { "key": "refreshToken", "value": "" },
+    { "key": "idToken", "value": "" },
+    { "key": "adminAccessToken", "value": "" },
+    { "key": "identityId", "value": "" },
+    { "key": "oauthCode", "value": "" },
+    { "key": "oauthState", "value": "" },
+    { "key": "authRequestId", "value": "" },
+    { "key": "passkeyLoginSessionId", "value": "" },
+    { "key": "passkeyRegisterSessionId", "value": "" },
+    { "key": "oidcClientId", "value": "demo-client" },
+    { "key": "oidcClientSecret", "value": "" },
+    { "key": "redirectUri", "value": "http://localhost:3000/oidc/callback" },
+    { "key": "oidcState", "value": "state-xyz" },
+    { "key": "oidcNonce", "value": "nonce-xyz" },
+    { "key": "oidcCodeChallenge", "value": "replace-with-pkce-s256-code_challenge" },
+    { "key": "oidcCodeVerifier", "value": "replace-with-pkce-code_verifier" },
+    { "key": "oidcCode", "value": "" },
+    { "key": "oidcAccessToken", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "Health",
+      "item": [
+        {
+          "name": "GET /healthz",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/healthz",
+              "host": ["{{baseUrl}}"],
+              "path": ["healthz"]
+            },
+            "description": "Health check endpoint"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "POST /api/v1/auth/register",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"identity_type\": \"password\",\n  \"identifier\": \"{{identifier}}\",\n  \"credential_data\": {\n    \"password\": \"{{password}}\"\n  },\n  \"invite_code\": \"{{inviteCode}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/register",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "auth", "register"]
+            }
+          }
+        },
+        {
+          "name": "POST /api/v1/auth/login",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "  const j = pm.response.json();",
+                  "  if (j && j.data) {",
+                  "    if (j.data.access_token) pm.collectionVariables.set('accessToken', j.data.access_token);",
+                  "    if (j.data.refresh_token) pm.collectionVariables.set('refreshToken', j.data.refresh_token);",
+                  "    if (j.data.id_token) pm.collectionVariables.set('idToken', j.data.id_token);",
+                  "  }",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"identity_type\": \"password\",\n  \"identifier\": \"{{identifier}}\",\n  \"credential_data\": {\n    \"password\": \"{{password}}\"\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "auth", "login"]
+            }
+          }
+        },
+        {
+          "name": "POST /api/v1/auth/refresh",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "  const j = pm.response.json();",
+                  "  if (j && j.data) {",
+                  "    if (j.data.access_token) pm.collectionVariables.set('accessToken', j.data.access_token);",
+                  "    if (j.data.refresh_token) pm.collectionVariables.set('refreshToken', j.data.refresh_token);",
+                  "    if (j.data.id_token) pm.collectionVariables.set('idToken', j.data.id_token);",
+                  "  }",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refresh_token\": \"{{refreshToken}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/refresh",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "auth", "refresh"]
+            }
+          }
+        },
+        {
+          "name": "POST /api/v1/auth/logout",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refresh_token\": \"{{refreshToken}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/logout",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "auth", "logout"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "OAuth2 Social",
+      "item": [
+        {
+          "name": "GET /api/v1/auth/oauth2/:provider/authorize",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/oauth2/{{provider}}/authorize",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "auth", "oauth2", "{{provider}}", "authorize"]
+            },
+            "description": "Will redirect (302) to provider authorization page."
+          }
+        },
+        {
+          "name": "GET /api/v1/auth/oauth2/:provider/callback",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "  const j = pm.response.json();",
+                  "  if (j && j.data) {",
+                  "    if (j.data.access_token) pm.collectionVariables.set('accessToken', j.data.access_token);",
+                  "    if (j.data.refresh_token) pm.collectionVariables.set('refreshToken', j.data.refresh_token);",
+                  "    if (j.data.id_token) pm.collectionVariables.set('idToken', j.data.id_token);",
+                  "  }",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/oauth2/{{provider}}/callback?code={{oauthCode}}&state={{oauthState}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "auth", "oauth2", "{{provider}}", "callback"],
+              "query": [
+                { "key": "code", "value": "{{oauthCode}}" },
+                { "key": "state", "value": "{{oauthState}}" }
+              ]
+            },
+            "description": "Fill oauthCode/oauthState first."
+          }
+        },
+        {
+          "name": "POST /api/v1/identities/oauth2/:provider/bind",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/identities/oauth2/{{provider}}/bind",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "identities", "oauth2", "{{provider}}", "bind"]
+            },
+            "description": "Returns authorize_url for binding flow."
+          }
+        },
+        {
+          "name": "GET /api/v1/identities/oauth2/:provider/callback",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/identities/oauth2/{{provider}}/callback?code={{oauthCode}}&state={{oauthState}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "identities", "oauth2", "{{provider}}", "callback"],
+              "query": [
+                { "key": "code", "value": "{{oauthCode}}" },
+                { "key": "state", "value": "{{oauthState}}" }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Identity",
+      "item": [
+        {
+          "name": "POST /api/v1/identities/bind",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"identity_type\": \"password\",\n  \"identifier\": \"alice-secondary@example.com\",\n  \"credential_data\": {\n    \"password\": \"AnotherPass123\"\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/identities/bind",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "identities", "bind"]
+            }
+          }
+        },
+        {
+          "name": "GET /api/v1/identities",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/identities",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "identities"]
+            }
+          }
+        },
+        {
+          "name": "DELETE /api/v1/identities/:id",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/identities/{{identityId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "identities", "{{identityId}}"]
+            },
+            "description": "Set identityId from GET /api/v1/identities response."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Passkey",
+      "item": [
+        {
+          "name": "POST /api/v1/auth/passkey/login/begin",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "  const j = pm.response.json();",
+                  "  if (j && j.data && j.data.session_id) pm.collectionVariables.set('passkeyLoginSessionId', j.data.session_id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/passkey/login/begin",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "auth", "passkey", "login", "begin"]
+            }
+          }
+        },
+        {
+          "name": "POST /api/v1/auth/passkey/login/finish",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "  const j = pm.response.json();",
+                  "  if (j && j.data) {",
+                  "    if (j.data.access_token) pm.collectionVariables.set('accessToken', j.data.access_token);",
+                  "    if (j.data.refresh_token) pm.collectionVariables.set('refreshToken', j.data.refresh_token);",
+                  "    if (j.data.id_token) pm.collectionVariables.set('idToken', j.data.id_token);",
+                  "  }",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id\": \"replace-with-browser-credential-id\",\n  \"rawId\": \"replace-with-raw-id\",\n  \"type\": \"public-key\",\n  \"response\": {\n    \"authenticatorData\": \"\",\n    \"clientDataJSON\": \"\",\n    \"signature\": \"\",\n    \"userHandle\": \"\"\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/passkey/login/finish?session_id={{passkeyLoginSessionId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "auth", "passkey", "login", "finish"],
+              "query": [
+                { "key": "session_id", "value": "{{passkeyLoginSessionId}}" }
+              ]
+            },
+            "description": "Body must be real WebAuthn assertion from browser."
+          }
+        },
+        {
+          "name": "POST /api/v1/auth/passkey/register/begin",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "  const j = pm.response.json();",
+                  "  if (j && j.data && j.data.session_id) pm.collectionVariables.set('passkeyRegisterSessionId', j.data.session_id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/passkey/register/begin",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "auth", "passkey", "register", "begin"]
+            }
+          }
+        },
+        {
+          "name": "POST /api/v1/auth/passkey/register/finish",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id\": \"replace-with-browser-credential-id\",\n  \"rawId\": \"replace-with-raw-id\",\n  \"type\": \"public-key\",\n  \"response\": {\n    \"attestationObject\": \"\",\n    \"clientDataJSON\": \"\"\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/passkey/register/finish?session_id={{passkeyRegisterSessionId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "auth", "passkey", "register", "finish"],
+              "query": [
+                { "key": "session_id", "value": "{{passkeyRegisterSessionId}}" }
+              ]
+            },
+            "description": "Body must be real WebAuthn attestation from browser."
+          }
+        }
+      ]
+    },
+    {
+      "name": "OIDC Login Completion",
+      "item": [
+        {
+          "name": "POST /api/v1/oidc/login/complete",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"auth_request_id\": \"{{authRequestId}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/oidc/login/complete",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "oidc", "login", "complete"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Admin - Invite Codes",
+      "item": [
+        {
+          "name": "POST /api/v1/admin/invite-codes",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{adminAccessToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"max_uses\": 10\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/invite-codes",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "admin", "invite-codes"]
+            }
+          }
+        },
+        {
+          "name": "GET /api/v1/admin/invite-codes",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{adminAccessToken}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/invite-codes",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "admin", "invite-codes"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Admin - OIDC Clients",
+      "item": [
+        {
+          "name": "POST /api/v1/admin/oidc-clients",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "  const j = pm.response.json();",
+                  "  if (j && j.data) {",
+                  "    if (j.data.client && j.data.client.client_id) pm.collectionVariables.set('oidcClientId', j.data.client.client_id);",
+                  "    if (j.data.client_secret) pm.collectionVariables.set('oidcClientSecret', j.data.client_secret);",
+                  "  }",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{adminAccessToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"client_id\": \"{{oidcClientId}}\",\n  \"name\": \"Demo App\",\n  \"redirect_uris\": [\"{{redirectUri}}\"],\n  \"allowed_scopes\": [\"openid\", \"profile\", \"email\", \"offline_access\"],\n  \"is_first_party\": true\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/oidc-clients",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "admin", "oidc-clients"]
+            }
+          }
+        },
+        {
+          "name": "GET /api/v1/admin/oidc-clients",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{adminAccessToken}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/oidc-clients",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "admin", "oidc-clients"]
+            }
+          }
+        },
+        {
+          "name": "GET /api/v1/admin/oidc-clients/:client_id",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{adminAccessToken}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/oidc-clients/{{oidcClientId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "admin", "oidc-clients", "{{oidcClientId}}"]
+            }
+          }
+        },
+        {
+          "name": "PUT /api/v1/admin/oidc-clients/:client_id",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{adminAccessToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Demo App v2\",\n  \"redirect_uris\": [\"{{redirectUri}}\"],\n  \"allowed_scopes\": [\"openid\", \"profile\", \"email\", \"offline_access\"],\n  \"is_first_party\": true\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/oidc-clients/{{oidcClientId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "admin", "oidc-clients", "{{oidcClientId}}"]
+            }
+          }
+        },
+        {
+          "name": "POST /api/v1/admin/oidc-clients/:client_id/rotate-secret",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "  const j = pm.response.json();",
+                  "  if (j && j.data && j.data.client_secret) pm.collectionVariables.set('oidcClientSecret', j.data.client_secret);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{adminAccessToken}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/oidc-clients/{{oidcClientId}}/rotate-secret",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "admin", "oidc-clients", "{{oidcClientId}}", "rotate-secret"]
+            }
+          }
+        },
+        {
+          "name": "DELETE /api/v1/admin/oidc-clients/:client_id",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{adminAccessToken}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/oidc-clients/{{oidcClientId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "admin", "oidc-clients", "{{oidcClientId}}"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "OIDC Provider",
+      "item": [
+        {
+          "name": "GET /oidc/.well-known/openid-configuration",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/oidc/.well-known/openid-configuration",
+              "host": ["{{baseUrl}}"],
+              "path": ["oidc", ".well-known", "openid-configuration"]
+            }
+          }
+        },
+        {
+          "name": "GET /oidc/keys",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/oidc/keys",
+              "host": ["{{baseUrl}}"],
+              "path": ["oidc", "keys"]
+            }
+          }
+        },
+        {
+          "name": "GET /oidc/authorize",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/oidc/authorize?client_id={{oidcClientId}}&redirect_uri={{redirectUri}}&response_type=code&scope=openid%20profile%20email%20offline_access&state={{oidcState}}&nonce={{oidcNonce}}&code_challenge={{oidcCodeChallenge}}&code_challenge_method=S256",
+              "host": ["{{baseUrl}}"],
+              "path": ["oidc", "authorize"],
+              "query": [
+                { "key": "client_id", "value": "{{oidcClientId}}" },
+                { "key": "redirect_uri", "value": "{{redirectUri}}" },
+                { "key": "response_type", "value": "code" },
+                { "key": "scope", "value": "openid profile email offline_access" },
+                { "key": "state", "value": "{{oidcState}}" },
+                { "key": "nonce", "value": "{{oidcNonce}}" },
+                { "key": "code_challenge", "value": "{{oidcCodeChallenge}}" },
+                { "key": "code_challenge_method", "value": "S256" }
+              ]
+            },
+            "description": "Browser flow. It will redirect to configured oidc.login_url."
+          }
+        },
+        {
+          "name": "POST /oidc/token (authorization_code)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "  const j = pm.response.json();",
+                  "  if (j && j.access_token) pm.collectionVariables.set('oidcAccessToken', j.access_token);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/x-www-form-urlencoded" }
+            ],
+            "auth": {
+              "type": "basic",
+              "basic": [
+                { "key": "username", "value": "{{oidcClientId}}", "type": "string" },
+                { "key": "password", "value": "{{oidcClientSecret}}", "type": "string" }
+              ]
+            },
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": [
+                { "key": "grant_type", "value": "authorization_code", "type": "text" },
+                { "key": "code", "value": "{{oidcCode}}", "type": "text" },
+                { "key": "redirect_uri", "value": "{{redirectUri}}", "type": "text" },
+                { "key": "code_verifier", "value": "{{oidcCodeVerifier}}", "type": "text" }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/oidc/token",
+              "host": ["{{baseUrl}}"],
+              "path": ["oidc", "token"]
+            },
+            "description": "Fill oidcCode (from callback) and oidcCodeVerifier (matching code_challenge)."
+          }
+        },
+        {
+          "name": "POST /oidc/token (refresh_token)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/x-www-form-urlencoded" }
+            ],
+            "auth": {
+              "type": "basic",
+              "basic": [
+                { "key": "username", "value": "{{oidcClientId}}", "type": "string" },
+                { "key": "password", "value": "{{oidcClientSecret}}", "type": "string" }
+              ]
+            },
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": [
+                { "key": "grant_type", "value": "refresh_token", "type": "text" },
+                { "key": "refresh_token", "value": "", "type": "text" },
+                { "key": "scope", "value": "openid profile email offline_access", "type": "text" }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/oidc/token",
+              "host": ["{{baseUrl}}"],
+              "path": ["oidc", "token"]
+            }
+          }
+        },
+        {
+          "name": "GET /oidc/userinfo",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{oidcAccessToken}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/oidc/userinfo",
+              "host": ["{{baseUrl}}"],
+              "path": ["oidc", "userinfo"]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}
