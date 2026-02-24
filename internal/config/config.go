@@ -1,6 +1,9 @@
 package config
 
 import (
+	"errors"
+	"fmt"
+	"os"
 	"strings"
 	"time"
 
@@ -8,17 +11,19 @@ import (
 )
 
 type Config struct {
-	Server   ServerConfig   `mapstructure:"server"`
-	Database DatabaseConfig `mapstructure:"database"`
-	State    StateConfig    `mapstructure:"state"`
-	JWT      JWTConfig      `mapstructure:"jwt"`
-	OIDC     OIDCConfig     `mapstructure:"oidc"`
-	OAuth2   OAuth2Config   `mapstructure:"oauth2"`
-	WebAuthn WebAuthnConfig `mapstructure:"webauthn"`
-	Invite   InviteConfig   `mapstructure:"invite"`
-	Admin    AdminConfig    `mapstructure:"admin"`
-	CORS     CORSConfig     `mapstructure:"cors"`
-	Log      LogConfig      `mapstructure:"log"`
+	Server            ServerConfig            `mapstructure:"server"`
+	Database          DatabaseConfig          `mapstructure:"database"`
+	State             StateConfig             `mapstructure:"state"`
+	JWT               JWTConfig               `mapstructure:"jwt"`
+	OIDC              OIDCConfig              `mapstructure:"oidc"`
+	OAuth2            OAuth2Config            `mapstructure:"oauth2"`
+	WebAuthn          WebAuthnConfig          `mapstructure:"webauthn"`
+	Invite            InviteConfig            `mapstructure:"invite"`
+	Admin             AdminConfig             `mapstructure:"admin"`
+	EmailVerification EmailVerificationConfig `mapstructure:"email_verification"`
+	SMTP              SMTPConfig              `mapstructure:"smtp"`
+	CORS              CORSConfig              `mapstructure:"cors"`
+	Log               LogConfig               `mapstructure:"log"`
 }
 
 type ServerConfig struct {
@@ -61,7 +66,7 @@ type StateConfig struct {
 }
 
 type JWTConfig struct {
-	SigningKey       string        `mapstructure:"signing_key"`
+	SigningKey      string        `mapstructure:"signing_key"`
 	Issuer          string        `mapstructure:"issuer"`
 	AccessTokenTTL  time.Duration `mapstructure:"access_token_ttl"`
 	RefreshTokenTTL time.Duration `mapstructure:"refresh_token_ttl"`
@@ -113,17 +118,39 @@ type LogConfig struct {
 	Format string `mapstructure:"format"`
 }
 
-// Load reads config.yaml, overlays environment variables, and returns Config.
-func Load(path string) (*Config, error) {
+type EmailVerificationConfig struct {
+	Enabled                    bool          `mapstructure:"enabled"`
+	RequireVerifiedForRegister bool          `mapstructure:"require_verified_for_register"`
+	RequireVerifiedForLogin    bool          `mapstructure:"require_verified_for_login"`
+	TokenTTL                   time.Duration `mapstructure:"token_ttl"`
+	VerifyURLTemplate          string        `mapstructure:"verify_url_template"` // e.g. https://app.example.com/verify-email?token={{TOKEN}}
+	TokenSizeBytes             int           `mapstructure:"token_size_bytes"`    // random bytes length before base64url encoding
+}
+
+type SMTPConfig struct {
+	Host          string `mapstructure:"host"`
+	Port          int    `mapstructure:"port"`
+	Username      string `mapstructure:"username"`
+	Password      string `mapstructure:"password"`
+	FromEmail     string `mapstructure:"from_email"`
+	FromName      string `mapstructure:"from_name"`
+	UseSTARTTLS   bool   `mapstructure:"use_starttls"`
+	SkipTLSVerify bool   `mapstructure:"skip_tls_verify"`
+}
+
+// Load reads base config, then optional local override config, overlays environment variables, and returns Config.
+func Load(basePath string, localOverridePath string) (*Config, error) {
 	v := viper.New()
-	v.SetConfigFile(path)
 	v.SetConfigType("yaml")
 
 	// Environment variable override: DATABASE_POSTGRES_HOST -> database.postgres.host
 	v.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
 	v.AutomaticEnv()
 
-	if err := v.ReadInConfig(); err != nil {
+	if err := mergeConfigFile(v, basePath, true); err != nil {
+		return nil, err
+	}
+	if err := mergeConfigFile(v, localOverridePath, false); err != nil {
 		return nil, err
 	}
 
@@ -132,4 +159,31 @@ func Load(path string) (*Config, error) {
 		return nil, err
 	}
 	return cfg, nil
+}
+
+func mergeConfigFile(v *viper.Viper, path string, required bool) error {
+	path = strings.TrimSpace(path)
+	if path == "" {
+		if required {
+			return errors.New("base config path is required")
+		}
+		return nil
+	}
+
+	v.SetConfigFile(path)
+
+	var err error
+	if required {
+		err = v.ReadInConfig()
+	} else {
+		err = v.MergeInConfig()
+	}
+	if err != nil {
+		var notFound viper.ConfigFileNotFoundError
+		if !required && (errors.As(err, &notFound) || os.IsNotExist(err)) {
+			return nil
+		}
+		return fmt.Errorf("load config file %s: %w", path, err)
+	}
+	return nil
 }

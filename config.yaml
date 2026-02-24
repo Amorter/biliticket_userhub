@@ -26,7 +26,7 @@ database:
     pool_size: 10
 
 state:
-  backend: "redis"                 # "redis" | "memory"
+  backend: "memory"                 # "redis" | "memory"
 
 jwt:
   signing_key: "CHANGE_ME_IN_PRODUCTION"
@@ -40,6 +40,24 @@ invite:
 
 admin:
   user_ids: []  # Add admin user UUIDs here, e.g. ["550e8400-e29b-41d4-a716-446655440000"]
+
+email_verification:
+  enabled: false
+  require_verified_for_register: true
+  require_verified_for_login: true
+  token_ttl: 30m
+  verify_url_template: "http://localhost:3000/verify-email?token={{TOKEN}}"
+  token_size_bytes: 32
+
+smtp:
+  host: "smtp.example.com"
+  port: 587
+  username: ""
+  password: ""
+  from_email: "no-reply@example.com"
+  from_name: "BiliTicket UserHub"
+  use_starttls: true
+  skip_tls_verify: false
 
 oidc:
   issuer: "http://localhost:8080"

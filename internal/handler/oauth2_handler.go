@@ -55,6 +55,10 @@ func (h *OAuth2Handler) Callback(c *gin.Context) {
 			response.Error(c, 404, 404, "identity not bound to any account, please register or bind first")
 		case errors.Is(err, service.ErrUserDisabled):
 			response.Error(c, 403, 403, "user is disabled")
+		case errors.Is(err, service.ErrProfileIncomplete):
+			response.Error(c, 403, 403, "user profile incomplete, username and display_name are required")
+		case errors.Is(err, service.ErrEmailNotVerified):
+			response.Error(c, 403, 403, "email is not verified")
 		default:
 			response.InternalError(c, "oauth2 login failed")
 		}

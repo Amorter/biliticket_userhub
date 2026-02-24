@@ -29,14 +29,17 @@ biliticket_userhub/
 本应用的登录也应该支持多种方式，比如支持google,github等标准的OIDC协议登录
 本应用应当可以控制接入本应用的OIDC应用的访问范围scope
 本应用不区分组织，凡是在本应用注册过的用户都可以登录绑定本应用的所有一方和三方应用
+所有登录用户都必须绑定用户名(username)和显示名称(display_name)，display_name默认与username一致
 2. 单点注册：
 应当提供统一的注册接口，对于这个接口，要提供邀请码功能，可以选择是否开启使用邀请码才能注册
 要提供无密码注册功能，比如绑定oauth2,passkey等登录方式来注册
+注册时至少需要绑定username和display_name；若display_name未传，后端默认设置为username
+password注册时需要有效邮箱，并支持邮箱验证流程（注册前申请验证邮件、携带token完成注册、已注册账号验证与重发）
 3. 登录方式绑定
 用户可以绑定oauth2,passkey等登录方式，用户的唯一可信凭据应该是本系统中的唯一id
 换句话说，不应该提供没有绑定对应oauth2登录的账户，如果用户通过oauth2登录，发现邮箱或用户名相同于是自动绑定对应本系统账户的功能
 4. 数据模型
-users表应该包含id,status,created_at,updated_at,deleted_at。这里故意不放username/password,把他们当作一种"身份凭证"拆分出去，实现真正的1passwordless架构
+users表应该包含id,username,display_name,email,email_verified_at,status,created_at,updated_at,deleted_at。username全局唯一且必填，display_name必填，默认与username一致。这里故意不放password，把密码及其他登录凭据当作一种"身份凭证"拆分出去，实现真正的passwordless架构
 user_identities表应该包含id,user_id,identity_type(枚举:password,github,google,passkey,wechat等),identifier(外部/内部唯一标识,如果是password,这里存username或email,如果是github,这里存github的subject_id),credential_data(凭据详情，如果是password,这里存bcrypt hash后的密码，如果是passkey,这里存public key,credential id,sign count等json)
 联合唯一索引(identity_type, identifier) 确保每种平台的某个具体身份只能绑定一个内部账号
 odic_clients表应该包含client_id,client_secret,name,redirect_uris,allowed_scopes,is_first_party
@@ -45,5 +48,6 @@ invite_codes表应该包含id,code,max_uses,used_count,expires_at,created_by
 5. Token签发
 Access Token和ID Token使用JWT
 Refresh Token的有效期可以在config中配置
+开启邮箱验证且要求登录前验证邮箱时，未验证邮箱用户不能拿到登录态token
 
-请用中文回复我，在每次对项目做出改动后，麻烦把当前的项目信息输出到LLM_out.txt，尽量输出的精简且完整，这样我可以在后续开新对话让空上下文的llm快速了解项目
+读完这个文档后，你需要读本文件目录下的hook文件夹下的所有文档,要符合他们的要求，如果有冲突向我询问

@@ -1,6 +1,8 @@
 package handler
 
 import (
+	"errors"
+
 	"github.com/gin-gonic/gin"
 
 	"biliticket/userhub/internal/service"
@@ -87,7 +89,16 @@ func (h *WebAuthnHandler) FinishLogin(c *gin.Context) {
 
 	tokenSet, err := h.webAuthnService.FinishLogin(c.Request.Context(), sessionID, c.Request)
 	if err != nil {
-		response.Unauthorized(c, "passkey login failed: "+err.Error())
+		switch {
+		case errors.Is(err, service.ErrUserDisabled):
+			response.Error(c, 403, 403, "user is disabled")
+		case errors.Is(err, service.ErrProfileIncomplete):
+			response.Error(c, 403, 403, "user profile incomplete, username and display_name are required")
+		case errors.Is(err, service.ErrEmailNotVerified):
+			response.Error(c, 403, 403, "email is not verified")
+		default:
+			response.Unauthorized(c, "passkey login failed: "+err.Error())
+		}
 		return
 	}
 

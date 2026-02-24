@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/go-jose/go-jose/v4"
@@ -24,12 +25,12 @@ const (
 
 // tokenInfo stores metadata about issued tokens in StateStore.
 type tokenInfo struct {
-	TokenID   string   `json:"token_id"`
-	UserID    string   `json:"user_id"`
-	ClientID  string   `json:"client_id"`
-	Scopes    []string `json:"scopes"`
-	Audience  []string `json:"audience"`
-	AMR       []string `json:"amr"`
+	TokenID   string    `json:"token_id"`
+	UserID    string    `json:"user_id"`
+	ClientID  string    `json:"client_id"`
+	Scopes    []string  `json:"scopes"`
+	Audience  []string  `json:"audience"`
+	AMR       []string  `json:"amr"`
 	AuthTime  time.Time `json:"auth_time"`
 	ExpiresAt time.Time `json:"expires_at"`
 }
@@ -292,16 +293,22 @@ func (s *Storage) setUserinfo(ctx context.Context, userinfo *oidc.UserInfo, user
 		return nil
 	}
 
-	// Look up email from password identity
-	identities, err := s.identityRepo.ListByUserID(ctx, uid)
-	if err != nil {
+	user, err := s.userRepo.GetByID(ctx, uid)
+	if err == nil && strings.TrimSpace(user.Email) != "" {
+		userinfo.Email = user.Email
+		userinfo.EmailVerified = oidc.Bool(user.EmailVerifiedAt != nil)
 		return nil
 	}
-	for _, id := range identities {
-		if id.IdentityType == "password" {
-			userinfo.Email = id.Identifier
-			userinfo.EmailVerified = oidc.Bool(false)
-			break
+
+	// Backward compatibility: fall back to password identity identifier if user.email is empty.
+	identities, err := s.identityRepo.ListByUserID(ctx, uid)
+	if err == nil {
+		for _, id := range identities {
+			if id.IdentityType == "password" {
+				userinfo.Email = id.Identifier
+				userinfo.EmailVerified = oidc.Bool(false)
+				break
+			}
 		}
 	}
 
@@ -364,15 +371,15 @@ type refreshTokenReq struct {
 	scopes []string // mutable scopes
 }
 
-func (r *refreshTokenReq) GetAMR() []string            { return r.info.AMR }
-func (r *refreshTokenReq) GetAudience() []string        { return r.info.Audience }
-func (r *refreshTokenReq) GetAuthTime() time.Time       { return r.info.AuthTime }
-func (r *refreshTokenReq) GetClientID() string          { return r.info.ClientID }
+func (r *refreshTokenReq) GetAMR() []string       { return r.info.AMR }
+func (r *refreshTokenReq) GetAudience() []string  { return r.info.Audience }
+func (r *refreshTokenReq) GetAuthTime() time.Time { return r.info.AuthTime }
+func (r *refreshTokenReq) GetClientID() string    { return r.info.ClientID }
 func (r *refreshTokenReq) GetScopes() []string {
 	if r.scopes != nil {
 		return r.scopes
 	}
 	return r.info.Scopes
 }
-func (r *refreshTokenReq) GetSubject() string           { return r.info.UserID }
+func (r *refreshTokenReq) GetSubject() string               { return r.info.UserID }
 func (r *refreshTokenReq) SetCurrentScopes(scopes []string) { r.scopes = scopes }

@@ -1,0 +1,3 @@
+# Local config overrides (do not commit personal debug secrets)
+config.local.yaml
+config.*.local.yaml

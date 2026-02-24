@@ -11,8 +11,9 @@
 
 | 能力 | 当前状态 | 说明 |
 | --- | --- | --- |
-| 用户注册 | 已支持 | 统一入口 `/api/v1/auth/register`，支持邀请码开关 |
-| 用户登录（密码） | 已支持 | `/api/v1/auth/login`，密码走 bcrypt 校验 |
+| 用户注册 | 已支持 | 统一入口 `/api/v1/auth/register`，注册时要求 `username`，`display_name` 缺省时默认等于 `username` |
+| 用户登录（密码） | 已支持 | `/api/v1/auth/login`，密码走 bcrypt 校验；登录前会检查 `username + display_name` 完整性 |
+| 邮箱验证 | 已支持 | SMTP 发信 + token 验证，支持“注册前强制验证”与“登录前必须验证”两种策略 |
 | Refresh Token 轮转 | 已支持 | 刷新时旧 token 立即失效（防重放） |
 | 身份绑定/解绑 | 已支持 | 支持 password/github/google/passkey 身份模型 |
 | OAuth2 社交登录 | 已支持 | GitHub / Google，基于 state 防 CSRF |
@@ -73,12 +74,31 @@ CREATE EXTENSION IF NOT EXISTS pgcrypto;
 - `jwt.signing_key`（生产环境必须替换）
 - `oidc.issuer` 与 `oidc.login_url`
 
+配置加载策略：
+- 基础配置：默认读取 `config.yaml`
+- 本地覆盖：自动尝试读取 `config.local.yaml`（不存在时忽略）
+- 环境变量覆盖：优先级最高
+
+推荐本地调试方式：
+- 保持 `config.yaml` 作为仓库内 demo 配置，不直接修改
+- 新建 `config.local.yaml` 写你的本地数据库、密钥等
+- `config.local.yaml` 已被 `.gitignore` 忽略，不会误提交
+
 环境变量可覆盖 YAML（Viper 自动映射 `.` -> `_`），例如：
 
 ```bash
 export DATABASE_POSTGRES_HOST=127.0.0.1
 export DATABASE_POSTGRES_PASSWORD=postgres
 export STATE_BACKEND=memory
+```
+
+也可通过启动参数或环境变量选择配置文件：
+
+```bash
+go run ./cmd/main.go -config config.yaml -config-local config.local.yaml
+
+# 或
+CONFIG_FILE=config.yaml CONFIG_LOCAL_FILE=config.local.yaml go run ./cmd/main.go
 ```
 
 ### 4. 启动服务
@@ -109,6 +129,8 @@ curl http://127.0.0.1:8080/healthz
 | `oidc.crypto_key` | OIDC 加解密种子 | 使用高强度随机字符串 |
 | `oauth2.github/google` | 社交登录配置 | 不配置则对应 provider 不可用 |
 | `webauthn.rp_id/rp_origins` | Passkey relying party 参数 | 必须和前端域名一致 |
+| `email_verification.*` | 邮箱验证开关、token 过期时间、前端验证链接模板 | 开启时建议 `require_verified_for_register=true` 与 `require_verified_for_login=true` |
+| `smtp.*` | SMTP 发信配置（host/port/username/password/from 等） | 使用专用 no-reply 邮箱并开启 STARTTLS |
 
 ## 响应与鉴权约定
 
@@ -138,6 +160,18 @@ Authorization: Bearer <access_token>
 
 ### 1) 用户注册与密码登录
 
+注册前邮箱验证（强制模式下必需）：
+
+```bash
+curl -X POST http://127.0.0.1:8080/api/v1/auth/email/verification/request \
+  -H 'Content-Type: application/json' \
+  -d '{"email":"alice@example.com"}'
+```
+
+说明：
+- 邮件链接会携带 `token`（由前端页面解析）
+- 若 `email_verification.require_verified_for_register=true`，注册必须携带这个 token
+
 注册（默认开启邀请码时需传 `invite_code`）：
 
 ```bash
@@ -146,10 +180,20 @@ curl -X POST http://127.0.0.1:8080/api/v1/auth/register \
   -d '{
     "identity_type": "password",
     "identifier": "alice@example.com",
+    "username": "alice_001",
+    "display_name": "Alice",
+    "email": "alice@example.com",
+    "email_verification_token": "<email_verify_token_from_mail>",
     "credential_data": {"password": "S3cret1234"},
     "invite_code": "abcd1234efgh5678"
   }'
 ```
+
+说明：
+- `username` 必填，格式限制为 3-64 位，仅允许字母、数字、`.`、`_`、`-`
+- `display_name` 选填，未传时默认等于 `username`
+- 对密码身份，`email` 必填
+- 开启“注册前强制验证”时，`email_verification_token` 必填且必须和 `email` 匹配
 
 登录：
 
@@ -161,6 +205,22 @@ curl -X POST http://127.0.0.1:8080/api/v1/auth/login \
     "identifier": "alice@example.com",
     "credential_data": {"password": "S3cret1234"}
   }'
+```
+
+邮箱验证（已注册账号场景）：
+
+```bash
+curl -X POST http://127.0.0.1:8080/api/v1/auth/email/verify \
+  -H 'Content-Type: application/json' \
+  -d '{"token":"<email_verify_token>"}'
+```
+
+重发验证邮件（幂等，避免枚举用户）：
+
+```bash
+curl -X POST http://127.0.0.1:8080/api/v1/auth/email/verification/resend \
+  -H 'Content-Type: application/json' \
+  -d '{"identifier":"alice@example.com"}'
 ```
 
 刷新令牌：

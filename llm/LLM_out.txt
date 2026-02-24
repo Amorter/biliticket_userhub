@@ -1,6 +1,6 @@
 ## biliticket_userhub 项目快照（2026-02-24）
 
-Go + Gin 的 CIAM 后端，支持统一认证、身份绑定、OIDC Provider、OAuth2 社交登录、Passkey，以及管理员 OIDC Client 管理 API。
+Go + Gin 的 CIAM 后端，支持统一认证、身份绑定、OIDC Provider、OAuth2 社交登录、Passkey、邮箱验证（SMTP），以及管理员 OIDC Client 管理 API。所有可登录用户都必须具备 `username + display_name`（`display_name` 默认等于 `username`）。
 
 ### 本轮新增
 1. 完善 OIDC Client 管理能力（Admin API）
@@ -24,6 +24,19 @@ Go + Gin 的 CIAM 后端，支持统一认证、身份绑定、OIDC Provider、O
    - `postman/biliticket_userhub.postman_collection.json`
    - 覆盖公开/受保护/管理员/OIDC Provider 全部路由
    - 内置 collection variables（baseUrl/token/client/session 等）与关键接口自动提取脚本
+8. 新增配置选择与本地覆盖机制
+   - `cmd/main.go` 支持 `-config` / `-config-local`
+   - 支持环境变量 `CONFIG_FILE` / `CONFIG_LOCAL_FILE`
+   - 默认行为：加载 `config.yaml`，再尝试加载 `config.local.yaml`（不存在则忽略）
+   - 新增 `.gitignore` 忽略 `config.local.yaml` 与 `config.*.local.yaml`
+9. 注册/登录与邮箱验证增强
+   - `users` 新增 `username`、`display_name`、`email`、`email_verified_at`
+   - 注册接口新增字段：`username`(必填)、`display_name`(默认同用户名)、`email`(password 身份必填)、`email_verification_token`(可按配置强制)
+   - 新增公开接口：
+     - `POST /api/v1/auth/email/verification/request`
+     - `POST /api/v1/auth/email/verify`
+     - `POST /api/v1/auth/email/verification/resend`
+   - 新增 SMTP 发送能力与邮箱验证 token 流程（StateStore，支持注册前验证）
 
 ### 技术栈
 - Go 1.25
@@ -61,10 +74,20 @@ Go + Gin 的 CIAM 后端，支持统一认证、身份绑定、OIDC Provider、O
 - `POST /api/v1/auth/register`
 - `POST /api/v1/auth/login`
 - `POST /api/v1/auth/refresh`
+- `POST /api/v1/auth/email/verification/request`
+- `POST /api/v1/auth/email/verify`
+- `POST /api/v1/auth/email/verification/resend`
 - `GET /api/v1/auth/oauth2/:provider/authorize`
 - `GET /api/v1/auth/oauth2/:provider/callback`
 - `POST /api/v1/auth/passkey/login/begin`
 - `POST /api/v1/auth/passkey/login/finish`
+
+认证输入约束：
+- 注册至少需要绑定 `username` 和 `display_name`；`display_name` 未传时默认等于 `username`
+- password 注册要求有效 `email`（可由 `identifier` 自动推断）
+- 若 `email_verification.enabled=true` 且 `require_verified_for_register=true`，注册必须提供有效 `email_verification_token`
+- 登录前校验用户已具备 `username` 和 `display_name`，否则拒绝登录
+- 若 `email_verification.enabled=true` 且 `require_verified_for_login=true`，邮箱未验证用户拒绝登录
 
 需 Access Token：
 - `POST /api/v1/auth/logout`
@@ -103,14 +126,18 @@ OIDC Provider：
 - `oidc_code:{code}`
 - `oidc_access:{tokenID}`
 - `oidc_refresh:{token}`
+- `email_verify:{token}`
 
 ### 关键行为
-1. `users` 表不存账号密码，凭据拆分到 `user_identities`（passwordless-friendly）。
-2. 密码注册会把 `credential_data.password` 转为 bcrypt hash 存储。
-3. Refresh token 使用 StateStore 记录 JTI，刷新即轮转，旧 token 失效。
-4. OAuth2 登录不会自动按邮箱合并账号，必须已有绑定身份。
-5. Passkey finish 接口读取 WebAuthn 原始 body，`session_id` 走 query。
-6. OIDC Client 的 secret 仅在“创建/轮换”接口返回，列表与详情不回显。
+1. `users` 表存基础资料 `username`（全局唯一）、`display_name`（必填，默认等于 `username`）、`email`、`email_verified_at`，不存密码。
+2. 注册与登录都要求用户至少绑定 `username + display_name`，不满足即拒绝（含 OAuth2/Passkey/Refresh 签发链路）。
+3. 密码注册会把 `credential_data.password` 转为 bcrypt hash 存储。
+4. 开启邮箱验证后：支持“注册前验证邮箱（request + register token）”；已注册账号仍可通过 verify/resend 接口验证与重发。
+5. 当 `require_verified_for_login=true` 时，未验证邮箱用户会被拒绝登录。
+6. Refresh token 使用 StateStore 记录 JTI，刷新即轮转，旧 token 失效。
+7. OAuth2 登录不会自动按邮箱合并账号，必须已有绑定身份。
+8. Passkey finish 接口读取 WebAuthn 原始 body，`session_id` 走 query。
+9. OIDC Client 的 secret 仅在“创建/轮换”接口返回，列表与详情不回显。
 
 ### 主要配置块（config.yaml）
 - `server`
@@ -120,6 +147,8 @@ OIDC Provider：
 - `jwt`
 - `invite`
 - `admin`
+- `email_verification`
+- `smtp`
 - `oidc`
 - `oauth2.github/google`
 - `webauthn`
@@ -131,3 +160,4 @@ OIDC Provider：
 2. `oidc_clients.client_secret` 当前是明文比对（建议后续改哈希存储）。
 3. OAuth2 登录与绑定共享同一个 `redirect_url` 配置，双流程同时启用时需要前端/配置配合。
 4. `invite.enabled=true` 时，首个管理员引导需要先做初始化策略（例如临时关闭邀请码）。
+5. `email_verification.enabled=true` 时，必须正确配置 `smtp.*` 与 `verify_url_template`，否则验证邮件无法发送。

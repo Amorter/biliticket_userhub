@@ -1,0 +1,2 @@
+请用中文回复我，在每次对项目做出改动后，麻烦把当前的项目信息输出到LLM_out.txt，尽量输出的精简且完整，这样我可以在后续开新对话让空上下文的llm快速了解项目
+在新增接口或修改后你需要同步修改本项目根目录下postman文件夹中的biliticket_userhub.postman_collection.json文件

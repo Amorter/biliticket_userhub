@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"flag"
 	"fmt"
 	"log"
 	"net/http"
@@ -21,8 +22,12 @@ import (
 )
 
 func main() {
+	baseConfigPath := flag.String("config", getenvOrDefault("CONFIG_FILE", "config.yaml"), "path to base config file")
+	localConfigPath := flag.String("config-local", getenvOrDefault("CONFIG_LOCAL_FILE", "config.local.yaml"), "path to local override config file (optional)")
+	flag.Parse()
+
 	// 1. Load configuration
-	cfg, err := config.Load("config.yaml")
+	cfg, err := config.Load(*baseConfigPath, *localConfigPath)
 	if err != nil {
 		log.Fatalf("failed to load config: %v", err)
 	}
@@ -82,10 +87,23 @@ func main() {
 		cfg.JWT.IDTokenTTL,
 	)
 
-	// 8. Initialize services
+	// 8. Initialize optional SMTP sender (email verification)
+	var mailSender service.MailSender
+	if cfg.EmailVerification.Enabled {
+		if cfg.EmailVerification.VerifyURLTemplate == "" {
+			logger.Fatal("email_verification.verify_url_template is required when email verification is enabled")
+		}
+		mailSender, err = service.NewSMTPSender(cfg.SMTP)
+		if err != nil {
+			logger.Fatal("failed to init smtp sender", zap.Error(err))
+		}
+		logger.Info("email verification enabled")
+	}
+
+	// 9. Initialize services
 	authService := service.NewAuthService(
 		userRepo, identityRepo, inviteRepo, stateStore,
-		jwtManager, cfg.Invite.Enabled,
+		jwtManager, cfg.Invite.Enabled, cfg.EmailVerification, mailSender,
 	)
 	identityService := service.NewIdentityService(identityRepo, userRepo)
 	oauth2Service := service.NewOAuth2Service(cfg.OAuth2, identityRepo, userRepo, stateStore, authService)
@@ -100,7 +118,7 @@ func main() {
 		logger.Info("WebAuthn service initialized", zap.String("rp_id", cfg.WebAuthn.RPID))
 	}
 
-	// 9. Initialize handlers
+	// 10. Initialize handlers
 	authHandler := handler.NewAuthHandler(authService)
 	identityHandler := handler.NewIdentityHandler(identityService)
 	oauth2Handler := handler.NewOAuth2Handler(oauth2Service)
@@ -114,7 +132,7 @@ func main() {
 	oidcClientService := service.NewOIDCClientService(oidcClientRepo)
 	adminHandler := handler.NewAdminHandler(inviteService, oidcClientService)
 
-	// 10. Initialize OIDC Provider
+	// 11. Initialize OIDC Provider
 	oidcProvider, oidcStorage, err := oidcmod.SetupProvider(
 		cfg.OIDC,
 		oidcClientRepo, userRepo, identityRepo, stateStore,
@@ -126,10 +144,10 @@ func main() {
 	oidcHandler := handler.NewOIDCHandler(oidcStorage, oidcProvider)
 	logger.Info("OIDC provider initialized", zap.String("issuer", cfg.OIDC.Issuer))
 
-	// 11. Setup router
+	// 12. Setup router
 	router := handler.SetupRouter(cfg, logger, jwtManager, authHandler, identityHandler, oidcHandler, oidcProvider, oauth2Handler, webAuthnHandler, adminHandler)
 
-	// 12. Create HTTP server
+	// 13. Create HTTP server
 	addr := fmt.Sprintf("%s:%d", cfg.Server.Host, cfg.Server.Port)
 	srv := &http.Server{
 		Addr:         addr,
@@ -138,7 +156,7 @@ func main() {
 		WriteTimeout: cfg.Server.WriteTimeout,
 	}
 
-	// 13. Start server with graceful shutdown
+	// 14. Start server with graceful shutdown
 	go func() {
 		logger.Info("server starting", zap.String("addr", addr))
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
@@ -146,7 +164,7 @@ func main() {
 		}
 	}()
 
-	// 14. Wait for interrupt signal
+	// 15. Wait for interrupt signal
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
@@ -158,4 +176,12 @@ func main() {
 		logger.Fatal("server forced to shutdown", zap.Error(err))
 	}
 	logger.Info("server exited gracefully")
+}
+
+func getenvOrDefault(key, fallback string) string {
+	value := os.Getenv(key)
+	if value == "" {
+		return fallback
+	}
+	return value
 }

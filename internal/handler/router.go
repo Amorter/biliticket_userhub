@@ -46,9 +46,12 @@ func SetupRouter(
 	// Public auth routes
 	auth := r.Group("/api/v1/auth")
 	{
+		auth.POST("/email/verification/request", authHandler.RequestRegistrationVerifyEmail)
 		auth.POST("/register", authHandler.Register)
 		auth.POST("/login", authHandler.Login)
 		auth.POST("/refresh", authHandler.Refresh)
+		auth.POST("/email/verify", authHandler.VerifyEmail)
+		auth.POST("/email/verification/resend", authHandler.ResendVerifyEmail)
 
 		// OAuth2 social login (public)
 		if oauth2Handler != nil {

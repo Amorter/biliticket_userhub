@@ -16,11 +16,15 @@ const (
 )
 
 type User struct {
-	ID        uuid.UUID      `gorm:"type:uuid;primaryKey;default:gen_random_uuid()" json:"id"`
-	Status    UserStatus     `gorm:"type:smallint;not null;default:1" json:"status"`
-	CreatedAt time.Time      `json:"created_at"`
-	UpdatedAt time.Time      `json:"updated_at"`
-	DeletedAt gorm.DeletedAt `gorm:"index" json:"deleted_at,omitempty"`
+	ID              uuid.UUID      `gorm:"type:uuid;primaryKey;default:gen_random_uuid()" json:"id"`
+	Username        string         `gorm:"type:varchar(64);not null;default:''" json:"username"`
+	DisplayName     string         `gorm:"type:varchar(128);not null;default:''" json:"display_name"`
+	Email           string         `gorm:"type:varchar(320);not null;default:''" json:"email"`
+	EmailVerifiedAt *time.Time     `json:"email_verified_at,omitempty"`
+	Status          UserStatus     `gorm:"type:smallint;not null;default:1" json:"status"`
+	CreatedAt       time.Time      `json:"created_at"`
+	UpdatedAt       time.Time      `json:"updated_at"`
+	DeletedAt       gorm.DeletedAt `gorm:"index" json:"deleted_at,omitempty"`
 
 	Identities []UserIdentity `gorm:"foreignKey:UserID" json:"identities,omitempty"`
 }

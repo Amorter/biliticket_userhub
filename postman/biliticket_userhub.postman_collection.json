@@ -9,6 +9,11 @@
     { "key": "baseUrl", "value": "http://127.0.0.1:8080" },
     { "key": "provider", "value": "github" },
     { "key": "identifier", "value": "alice@example.com" },
+    { "key": "username", "value": "alice_001" },
+    { "key": "displayName", "value": "alice_001" },
+    { "key": "email", "value": "alice@example.com" },
+    { "key": "registerEmailVerifyToken", "value": "" },
+    { "key": "emailVerifyToken", "value": "" },
     { "key": "password", "value": "S3cret1234" },
     { "key": "inviteCode", "value": "" },
     { "key": "accessToken", "value": "" },
@@ -54,6 +59,25 @@
       "name": "Auth",
       "item": [
         {
+          "name": "POST /api/v1/auth/email/verification/request",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{email}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/email/verification/request",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "auth", "email", "verification", "request"]
+            },
+            "description": "注册前邮箱验证。前端从邮件链接中拿到 token，填入 registerEmailVerifyToken。"
+          }
+        },
+        {
           "name": "POST /api/v1/auth/register",
           "request": {
             "method": "POST",
@@ -62,7 +86,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"identity_type\": \"password\",\n  \"identifier\": \"{{identifier}}\",\n  \"credential_data\": {\n    \"password\": \"{{password}}\"\n  },\n  \"invite_code\": \"{{inviteCode}}\"\n}"
+              "raw": "{\n  \"identity_type\": \"password\",\n  \"identifier\": \"{{identifier}}\",\n  \"username\": \"{{username}}\",\n  \"display_name\": \"{{displayName}}\",\n  \"email\": \"{{email}}\",\n  \"email_verification_token\": \"{{registerEmailVerifyToken}}\",\n  \"credential_data\": {\n    \"password\": \"{{password}}\"\n  },\n  \"invite_code\": \"{{inviteCode}}\"\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/api/v1/auth/register",
@@ -104,6 +128,42 @@
               "raw": "{{baseUrl}}/api/v1/auth/login",
               "host": ["{{baseUrl}}"],
               "path": ["api", "v1", "auth", "login"]
+            }
+          }
+        },
+        {
+          "name": "POST /api/v1/auth/email/verify",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"token\": \"{{emailVerifyToken}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/email/verify",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "auth", "email", "verify"]
+            }
+          }
+        },
+        {
+          "name": "POST /api/v1/auth/email/verification/resend",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"identifier\": \"{{identifier}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/email/verification/resend",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "auth", "email", "verification", "resend"]
             }
           }
         },
