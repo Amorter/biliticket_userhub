@@ -45,3 +45,5 @@ invite_codes表应该包含id,code,max_uses,used_count,expires_at,created_by
 5. Token签发
 Access Token和ID Token使用JWT
 Refresh Token的有效期可以在config中配置
+
+请用中文回复我，在每次对项目做出改动后，麻烦把当前的项目信息输出到LLM_out.txt，尽量输出的精简且完整，这样我可以在后续开新对话让空上下文的llm快速了解项目

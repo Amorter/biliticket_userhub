@@ -1,11 +1,58 @@
+server:
+  host: "0.0.0.0"
+  port: 8080
+  mode: "debug"                    # gin mode: debug | release | test
+  read_timeout: 10s
+  write_timeout: 10s
+  graceful_shutdown_timeout: 5s
+
 database:
-  redis:
-    host: localhost
-    port: 6379
-    db: 0
   postgres:
-    host: localhost
+    host: "localhost"
     port: 5432
-    db: biliticket_userhub
-    user: postgres
-    password: postgres
+    db: "biliticket_userhub"
+    user: "postgres"
+    password: "postgres"
+    sslmode: "disable"
+    max_idle_conns: 10
+    max_open_conns: 100
+    conn_max_lifetime: 1h
+    auto_migrate: true
+  redis:
+    host: "localhost"
+    port: 6379
+    password: ""
+    db: 0
+    pool_size: 10
+
+state:
+  backend: "redis"                 # "redis" | "memory"
+
+jwt:
+  signing_key: "CHANGE_ME_IN_PRODUCTION"
+  issuer: "biliticket-userhub"
+  access_token_ttl: 15m
+  refresh_token_ttl: 168h          # 7 days
+  id_token_ttl: 1h
+
+invite:
+  enabled: true
+
+cors:
+  allowed_origins:
+    - "http://localhost:3000"
+  allowed_methods:
+    - "GET"
+    - "POST"
+    - "PUT"
+    - "DELETE"
+    - "OPTIONS"
+  allowed_headers:
+    - "Authorization"
+    - "Content-Type"
+  allow_credentials: true
+  max_age: 12h
+
+log:
+  level: "debug"                   # debug | info | warn | error
+  format: "console"               # json | console

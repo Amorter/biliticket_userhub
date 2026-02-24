@@ -1,0 +1,61 @@
+## biliticket_userhub 项目信息
+
+CIAM系统后端，Go + Gin，支持SSO/OIDC/Passkey，passwordless架构。
+
+### 技术栈
+Go 1.25 | Gin | GORM | PostgreSQL | Redis | Viper | JWT(HS256) | zap | bcrypt
+
+### 项目结构
+```
+cmd/main.go                           # 入口：config→logger→PG→migrate→StateStore→repos→JWT→services→handlers→router→HTTP server + graceful shutdown
+internal/
+  config/
+    config.go                         # Config结构体 + viper Load()，支持YAML+环境变量覆盖
+    database.go                       # NewPostgresDB(GORM) + NewRedisClient(go-redis)
+  model/
+    user.go                           # User: uuid PK, status(枚举1/2/3), soft delete, has-many Identities
+    identity.go                       # UserIdentity: uuid PK, user_id FK, identity_type(password/github/google/passkey/wechat), identifier, credential_data(jsonb)
+                                      # 联合唯一索引 (identity_type, identifier) WHERE deleted_at IS NULL
+    oidc_client.go                    # OIDCClient: client_id字符串PK, client_secret, redirect_uris/allowed_scopes(jsonb StringSlice), is_first_party
+    invite_code.go                    # InviteCode: uuid PK, code(唯一), max_uses, used_count, expires_at, created_by
+    migrate.go                        # AutoMigrate() 4张表 + 部分唯一索引
+  repository/
+    user_repo.go / user_repo_pg.go              # UserRepository接口 + PG实现: Create/GetByID/GetByIDWithIdentities/Update/Delete
+    identity_repo.go / identity_repo_pg.go      # IdentityRepository: Create/GetByTypeAndIdentifier/ListByUserID/Update/Delete
+    oidc_client_repo.go / oidc_client_repo_pg.go # OIDCClientRepository: Create/GetByClientID/List/Update/Delete
+    invite_code_repo.go / invite_code_repo_pg.go # InviteCodeRepository: Create/GetByCode/IncrementUsedCount
+    state_store.go                    # StateStore接口: Set/Get/Delete/Exists (key-value + TTL)
+    state_store_redis.go              # Redis实现
+    state_store_memory.go             # 内存实现(sync.RWMutex + 惰性TTL)
+  handler/
+    middleware/
+      auth.go                         # JWT Bearer校验，提取claims到gin.Context
+      cors.go                         # gin-contrib/cors
+      logger.go                       # zap请求日志
+      recovery.go                     # panic恢复
+    auth_handler.go                   # AuthHandler: Register/Login/Refresh/Logout (TODO stub)
+    router.go                         # SetupRouter: 全局中间件 + /healthz + /api/v1/auth/* (公开) + /api/v1/* (JWT保护)
+  service/
+    auth_service.go                   # AuthService接口: Register/Login/RefreshToken/Logout + TokenSet结构体 (TODO stub)
+    identity_service.go               # IdentityService接口: BindIdentity/UnbindIdentity/ListIdentities (TODO stub)
+pkg/
+  jwt/jwt.go                          # JWT Manager: GenerateAccessToken/GenerateRefreshToken/GenerateIDToken/Validate (HS256)
+  crypto/crypto.go                    # HashPassword/CheckPassword(bcrypt) + GenerateRandomString/GenerateClientSecret/GenerateInviteCode
+  response/response.go                # 统一API响应 {code,message,data} + Success/Error/BadRequest/Unauthorized/InternalError
+```
+
+### 配置 (config.yaml)
+server(host/port/mode/timeout) | database.postgres(连接池) | database.redis | state.backend("redis"|"memory") | jwt(signing_key/issuer/TTL) | invite.enabled | cors | log(level/format)
+
+### API路由
+- GET  /healthz                    → 健康检查
+- POST /api/v1/auth/register       → 注册 (TODO)
+- POST /api/v1/auth/login          → 登录 (TODO)
+- POST /api/v1/auth/refresh        → 刷新token (TODO)
+- POST /api/v1/auth/logout         → 登出 (需JWT) (TODO)
+
+### 关键设计
+1. Passwordless架构: users表不存密码，凭据在user_identities表中按identity_type分类存储
+2. StateStore接口: 云原生抽象，config中选redis或memory，用于refresh token/OIDC code/WebAuthn challenge存储
+3. 所有Service/Handler方法目前为TODO stub，待后续实现具体业务逻辑
+4. 支持阿里云FC Custom Runtime部署: 标准HTTP server + 环境变量覆盖配置 + graceful shutdown
