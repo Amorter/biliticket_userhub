@@ -28,6 +28,14 @@ func Unauthorized(c *gin.Context, message string) {
 	Error(c, http.StatusUnauthorized, 401, message)
 }
 
+func Forbidden(c *gin.Context, message string) {
+	Error(c, http.StatusForbidden, 403, message)
+}
+
+func Conflict(c *gin.Context, message string) {
+	Error(c, http.StatusConflict, 409, message)
+}
+
 func InternalError(c *gin.Context, message string) {
 	Error(c, http.StatusInternalServerError, 500, message)
 }

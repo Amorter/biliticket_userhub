@@ -2,6 +2,7 @@ package handler
 
 import (
 	"github.com/gin-gonic/gin"
+	"github.com/zitadel/oidc/v3/pkg/op"
 	"go.uber.org/zap"
 
 	"biliticket/userhub/internal/config"
@@ -14,6 +15,12 @@ func SetupRouter(
 	logger *zap.Logger,
 	jwtManager *jwtpkg.Manager,
 	authHandler *AuthHandler,
+	identityHandler *IdentityHandler,
+	oidcHandler *OIDCHandler,
+	oidcProvider op.OpenIDProvider,
+	oauth2Handler *OAuth2Handler,
+	webAuthnHandler *WebAuthnHandler,
+	adminHandler *AdminHandler,
 ) *gin.Engine {
 	if cfg.Server.Mode == "release" {
 		gin.SetMode(gin.ReleaseMode)
@@ -31,12 +38,29 @@ func SetupRouter(
 		c.JSON(200, gin.H{"status": "ok"})
 	})
 
+	// OIDC Provider endpoints (/oidc/authorize, /oidc/token, /oidc/userinfo, etc.)
+	if oidcProvider != nil {
+		MountOIDCProvider(r, oidcProvider)
+	}
+
 	// Public auth routes
 	auth := r.Group("/api/v1/auth")
 	{
 		auth.POST("/register", authHandler.Register)
 		auth.POST("/login", authHandler.Login)
 		auth.POST("/refresh", authHandler.Refresh)
+
+		// OAuth2 social login (public)
+		if oauth2Handler != nil {
+			auth.GET("/oauth2/:provider/authorize", oauth2Handler.Authorize)
+			auth.GET("/oauth2/:provider/callback", oauth2Handler.Callback)
+		}
+
+		// Passkey login (public)
+		if webAuthnHandler != nil {
+			auth.POST("/passkey/login/begin", webAuthnHandler.BeginLogin)
+			auth.POST("/passkey/login/finish", webAuthnHandler.FinishLogin)
+		}
 	}
 
 	// Protected routes
@@ -44,6 +68,39 @@ func SetupRouter(
 	protected.Use(middleware.JWTAuth(jwtManager))
 	{
 		protected.POST("/auth/logout", authHandler.Logout)
+
+		// Identity management
+		protected.POST("/identities/bind", identityHandler.Bind)
+		protected.DELETE("/identities/:id", identityHandler.Unbind)
+		protected.GET("/identities", identityHandler.List)
+
+		// OAuth2 identity binding (requires auth)
+		if oauth2Handler != nil {
+			protected.POST("/identities/oauth2/:provider/bind", oauth2Handler.BindAuthorize)
+			protected.GET("/identities/oauth2/:provider/callback", oauth2Handler.BindCallback)
+		}
+
+		// Passkey registration (requires auth)
+		if webAuthnHandler != nil {
+			protected.POST("/auth/passkey/register/begin", webAuthnHandler.BeginRegistration)
+			protected.POST("/auth/passkey/register/finish", webAuthnHandler.FinishRegistration)
+		}
+
+		// OIDC login completion (user must be authenticated)
+		if oidcHandler != nil {
+			protected.POST("/oidc/login/complete", oidcHandler.CompleteLogin)
+		}
+	}
+
+	// Admin routes (JWT + admin check)
+	if adminHandler != nil {
+		admin := r.Group("/api/v1/admin")
+		admin.Use(middleware.JWTAuth(jwtManager))
+		admin.Use(middleware.AdminAuth(cfg.Admin.UserIDs))
+		{
+			admin.POST("/invite-codes", adminHandler.CreateInviteCode)
+			admin.GET("/invite-codes", adminHandler.ListInviteCodes)
+		}
 	}
 
 	return r

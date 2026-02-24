@@ -38,6 +38,37 @@ jwt:
 invite:
   enabled: true
 
+admin:
+  user_ids: []  # Add admin user UUIDs here, e.g. ["550e8400-e29b-41d4-a716-446655440000"]
+
+oidc:
+  issuer: "http://localhost:8080"
+  crypto_key: "CHANGE_ME_32_BYTES_FOR_PROD_USE!"  # must be exactly 32 bytes
+  login_url: "http://localhost:3000/login?auth_request_id={{ID}}"  # frontend login page
+
+oauth2:
+  github:
+    client_id: ""
+    client_secret: ""
+    redirect_url: "http://localhost:8080/api/v1/auth/oauth2/github/callback"
+    scopes:
+      - "read:user"
+      - "user:email"
+  google:
+    client_id: ""
+    client_secret: ""
+    redirect_url: "http://localhost:8080/api/v1/auth/oauth2/google/callback"
+    scopes:
+      - "openid"
+      - "email"
+      - "profile"
+
+webauthn:
+  rp_display_name: "BiliTicket UserHub"
+  rp_id: "localhost"
+  rp_origins:
+    - "http://localhost:3000"
+
 cors:
   allowed_origins:
     - "http://localhost:3000"

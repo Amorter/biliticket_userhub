@@ -12,7 +12,11 @@ type Config struct {
 	Database DatabaseConfig `mapstructure:"database"`
 	State    StateConfig    `mapstructure:"state"`
 	JWT      JWTConfig      `mapstructure:"jwt"`
+	OIDC     OIDCConfig     `mapstructure:"oidc"`
+	OAuth2   OAuth2Config   `mapstructure:"oauth2"`
+	WebAuthn WebAuthnConfig `mapstructure:"webauthn"`
 	Invite   InviteConfig   `mapstructure:"invite"`
+	Admin    AdminConfig    `mapstructure:"admin"`
 	CORS     CORSConfig     `mapstructure:"cors"`
 	Log      LogConfig      `mapstructure:"log"`
 }
@@ -66,6 +70,34 @@ type JWTConfig struct {
 
 type InviteConfig struct {
 	Enabled bool `mapstructure:"enabled"`
+}
+
+type AdminConfig struct {
+	UserIDs []string `mapstructure:"user_ids"` // List of admin user UUIDs
+}
+
+type OIDCConfig struct {
+	Issuer    string `mapstructure:"issuer"`     // OIDC issuer URL (e.g. https://auth.example.com)
+	CryptoKey string `mapstructure:"crypto_key"` // 32-byte key for encrypting auth codes
+	LoginURL  string `mapstructure:"login_url"`  // Frontend login page URL template
+}
+
+type OAuth2Config struct {
+	GitHub OAuth2ProviderConfig `mapstructure:"github"`
+	Google OAuth2ProviderConfig `mapstructure:"google"`
+}
+
+type OAuth2ProviderConfig struct {
+	ClientID     string   `mapstructure:"client_id"`
+	ClientSecret string   `mapstructure:"client_secret"`
+	RedirectURL  string   `mapstructure:"redirect_url"` // Our callback URL
+	Scopes       []string `mapstructure:"scopes"`
+}
+
+type WebAuthnConfig struct {
+	RPDisplayName string   `mapstructure:"rp_display_name"`
+	RPID          string   `mapstructure:"rp_id"`
+	RPOrigins     []string `mapstructure:"rp_origins"`
 }
 
 type CORSConfig struct {

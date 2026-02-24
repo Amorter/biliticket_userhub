@@ -14,6 +14,7 @@ import (
 	"biliticket/userhub/internal/config"
 	"biliticket/userhub/internal/handler"
 	"biliticket/userhub/internal/model"
+	oidcmod "biliticket/userhub/internal/oidc"
 	"biliticket/userhub/internal/repository"
 	"biliticket/userhub/internal/service"
 	jwtpkg "biliticket/userhub/pkg/jwt"
@@ -70,6 +71,7 @@ func main() {
 	userRepo := repository.NewPGUserRepository(db)
 	identityRepo := repository.NewPGIdentityRepository(db)
 	inviteRepo := repository.NewPGInviteCodeRepository(db)
+	oidcClientRepo := repository.NewPGOIDCClientRepository(db)
 
 	// 7. Initialize JWT manager
 	jwtManager := jwtpkg.NewManager(
@@ -85,14 +87,48 @@ func main() {
 		userRepo, identityRepo, inviteRepo, stateStore,
 		jwtManager, cfg.Invite.Enabled,
 	)
+	identityService := service.NewIdentityService(identityRepo, userRepo)
+	oauth2Service := service.NewOAuth2Service(cfg.OAuth2, identityRepo, userRepo, stateStore, authService)
+
+	// WebAuthn service
+	var webAuthnService service.WebAuthnService
+	if cfg.WebAuthn.RPID != "" {
+		webAuthnService, err = service.NewWebAuthnService(cfg.WebAuthn, userRepo, identityRepo, stateStore, authService)
+		if err != nil {
+			logger.Fatal("failed to init webauthn service", zap.Error(err))
+		}
+		logger.Info("WebAuthn service initialized", zap.String("rp_id", cfg.WebAuthn.RPID))
+	}
 
 	// 9. Initialize handlers
 	authHandler := handler.NewAuthHandler(authService)
+	identityHandler := handler.NewIdentityHandler(identityService)
+	oauth2Handler := handler.NewOAuth2Handler(oauth2Service)
+	var webAuthnHandler *handler.WebAuthnHandler
+	if webAuthnService != nil {
+		webAuthnHandler = handler.NewWebAuthnHandler(webAuthnService)
+	}
 
-	// 10. Setup router
-	router := handler.SetupRouter(cfg, logger, jwtManager, authHandler)
+	// Invite & admin
+	inviteService := service.NewInviteService(inviteRepo)
+	adminHandler := handler.NewAdminHandler(inviteService)
 
-	// 11. Create HTTP server
+	// 10. Initialize OIDC Provider
+	oidcProvider, oidcStorage, err := oidcmod.SetupProvider(
+		cfg.OIDC,
+		oidcClientRepo, userRepo, identityRepo, stateStore,
+		cfg.JWT.AccessTokenTTL, cfg.JWT.RefreshTokenTTL,
+	)
+	if err != nil {
+		logger.Fatal("failed to setup OIDC provider", zap.Error(err))
+	}
+	oidcHandler := handler.NewOIDCHandler(oidcStorage, oidcProvider)
+	logger.Info("OIDC provider initialized", zap.String("issuer", cfg.OIDC.Issuer))
+
+	// 11. Setup router
+	router := handler.SetupRouter(cfg, logger, jwtManager, authHandler, identityHandler, oidcHandler, oidcProvider, oauth2Handler, webAuthnHandler, adminHandler)
+
+	// 12. Create HTTP server
 	addr := fmt.Sprintf("%s:%d", cfg.Server.Host, cfg.Server.Port)
 	srv := &http.Server{
 		Addr:         addr,
@@ -101,7 +137,7 @@ func main() {
 		WriteTimeout: cfg.Server.WriteTimeout,
 	}
 
-	// 12. Start server with graceful shutdown
+	// 13. Start server with graceful shutdown
 	go func() {
 		logger.Info("server starting", zap.String("addr", addr))
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
@@ -109,7 +145,7 @@ func main() {
 		}
 	}()
 
-	// 13. Wait for interrupt signal
+	// 14. Wait for interrupt signal
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit

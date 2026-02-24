@@ -35,3 +35,11 @@ func (r *pgInviteCodeRepository) IncrementUsedCount(ctx context.Context, code st
 		UpdateColumn("used_count", gorm.Expr("used_count + 1")).
 		Error
 }
+
+func (r *pgInviteCodeRepository) List(ctx context.Context) ([]model.InviteCode, error) {
+	var codes []model.InviteCode
+	if err := r.db.WithContext(ctx).Order("created_at DESC").Find(&codes).Error; err != nil {
+		return nil, err
+	}
+	return codes, nil
+}

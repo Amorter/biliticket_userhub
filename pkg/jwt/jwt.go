@@ -96,6 +96,9 @@ func (m *Manager) GenerateIDToken(userID uuid.UUID) (string, error) {
 	return token.SignedString(m.signingKey)
 }
 
+func (m *Manager) AccessTokenTTL() time.Duration  { return m.accessTokenTTL }
+func (m *Manager) RefreshTokenTTL() time.Duration { return m.refreshTokenTTL }
+
 // Validate parses and validates a token string, returning claims.
 func (m *Manager) Validate(tokenStr string) (*Claims, error) {
 	token, err := jwt.ParseWithClaims(tokenStr, &Claims{}, func(token *jwt.Token) (interface{}, error) {

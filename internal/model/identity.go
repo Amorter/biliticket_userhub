@@ -17,7 +17,6 @@ const (
 	IdentityTypeGitHub   IdentityType = "github"
 	IdentityTypeGoogle   IdentityType = "google"
 	IdentityTypePasskey  IdentityType = "passkey"
-	IdentityTypeWeChat   IdentityType = "wechat"
 )
 
 // CredentialData is a JSON blob stored in the credential_data column.

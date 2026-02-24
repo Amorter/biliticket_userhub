@@ -1,61 +1,140 @@
 ## biliticket_userhub 项目信息
 
-CIAM系统后端，Go + Gin，支持SSO/OIDC/Passkey，passwordless架构。
+CIAM系统后端，Go + Gin，支持SSO/OIDC/Passkey/OAuth2社交登录，passwordless架构。
 
 ### 技术栈
-Go 1.25 | Gin | GORM | PostgreSQL | Redis | Viper | JWT(HS256) | zap | bcrypt
+Go 1.25 | Gin | GORM | PostgreSQL | Redis | Viper | JWT(HS256) | zap | bcrypt | zitadel/oidc v3 | go-webauthn
 
 ### 项目结构
 ```
-cmd/main.go                           # 入口：config→logger→PG→migrate→StateStore→repos→JWT→services→handlers→router→HTTP server + graceful shutdown
+cmd/main.go                           # 入口：config→logger→PG→migrate→StateStore→repos→JWT→services→handlers→OIDC provider→router→HTTP server + graceful shutdown
+
 internal/
   config/
     config.go                         # Config结构体 + viper Load()，支持YAML+环境变量覆盖
+                                      # 包含: Server/Database/State/JWT/OIDC/OAuth2/WebAuthn/Invite/Admin/CORS/Log 配置
     database.go                       # NewPostgresDB(GORM) + NewRedisClient(go-redis)
+
   model/
-    user.go                           # User: uuid PK, status(枚举1/2/3), soft delete, has-many Identities
+    user.go                           # User: uuid PK, status(Active=1/Disabled=2/Banned=3), soft delete, has-many Identities
     identity.go                       # UserIdentity: uuid PK, user_id FK, identity_type(password/github/google/passkey/wechat), identifier, credential_data(jsonb)
                                       # 联合唯一索引 (identity_type, identifier) WHERE deleted_at IS NULL
     oidc_client.go                    # OIDCClient: client_id字符串PK, client_secret, redirect_uris/allowed_scopes(jsonb StringSlice), is_first_party
     invite_code.go                    # InviteCode: uuid PK, code(唯一), max_uses, used_count, expires_at, created_by
     migrate.go                        # AutoMigrate() 4张表 + 部分唯一索引
+
   repository/
-    user_repo.go / user_repo_pg.go              # UserRepository接口 + PG实现: Create/GetByID/GetByIDWithIdentities/Update/Delete
+    user_repo.go / user_repo_pg.go              # UserRepository: Create/GetByID/GetByIDWithIdentities/Update/Delete
     identity_repo.go / identity_repo_pg.go      # IdentityRepository: Create/GetByTypeAndIdentifier/ListByUserID/Update/Delete
     oidc_client_repo.go / oidc_client_repo_pg.go # OIDCClientRepository: Create/GetByClientID/List/Update/Delete
-    invite_code_repo.go / invite_code_repo_pg.go # InviteCodeRepository: Create/GetByCode/IncrementUsedCount
+    invite_code_repo.go / invite_code_repo_pg.go # InviteCodeRepository: Create/GetByCode/IncrementUsedCount/List
     state_store.go                    # StateStore接口: Set/Get/Delete/Exists (key-value + TTL)
     state_store_redis.go              # Redis实现
     state_store_memory.go             # 内存实现(sync.RWMutex + 惰性TTL)
+
   handler/
     middleware/
-      auth.go                         # JWT Bearer校验，提取claims到gin.Context
+      auth.go                         # JWT Bearer校验，提取claims到gin.Context("user_claims")
+      admin.go                        # Admin权限检查，基于配置的admin user UUID白名单
       cors.go                         # gin-contrib/cors
       logger.go                       # zap请求日志
       recovery.go                     # panic恢复
-    auth_handler.go                   # AuthHandler: Register/Login/Refresh/Logout (TODO stub)
-    router.go                         # SetupRouter: 全局中间件 + /healthz + /api/v1/auth/* (公开) + /api/v1/* (JWT保护)
+    helpers.go                        # getUserIDFromContext() — 从JWT claims提取user UUID
+    auth_handler.go                   # AuthHandler: Register/Login/Refresh/Logout
+    identity_handler.go               # IdentityHandler: Bind/Unbind/List
+    oauth2_handler.go                 # OAuth2Handler: Authorize/Callback/BindAuthorize/BindCallback
+    webauthn_handler.go               # WebAuthnHandler: BeginRegistration/FinishRegistration/BeginLogin/FinishLogin
+    oidc_handler.go                   # OIDCHandler: CompleteLogin + MountOIDCProvider()
+    admin_handler.go                  # AdminHandler: CreateInviteCode/ListInviteCodes
+    router.go                         # SetupRouter: 全局中间件 + 公开/保护/管理员路由组
+
   service/
-    auth_service.go                   # AuthService接口: Register/Login/RefreshToken/Logout + TokenSet结构体 (TODO stub)
-    identity_service.go               # IdentityService接口: BindIdentity/UnbindIdentity/ListIdentities (TODO stub)
+    errors.go                         # 统一业务错误: ErrIdentityAlreadyExists/ErrInvalidCredentials/ErrInviteCode*/ErrRefreshTokenInvalid/ErrUser*/ErrIdentity*/ErrUnsupportedIdentity
+    auth_service.go                   # AuthService: Register/Login/RefreshToken/Logout + issueTokenSet() + processCredentialData()
+                                      # Register: 邀请码校验→身份唯一性→密码hash→创建user→创建identity→递增邀请码用量
+                                      # Login: 查身份→验用户状态→验密码→签发三token
+                                      # RefreshToken: 验JWT→检查JTI存在→验用户状态→旧JTI删除→签发新token (Token Rotation)
+                                      # Logout: 验JWT→删除JTI
+    identity_service.go               # IdentityService: BindIdentity/UnbindIdentity/ListIdentities
+                                      # Bind: 验用户存在且Active→验身份未占用→processCredentialData→创建
+                                      # Unbind: 查所有身份→至少保留一个→确认归属→软删除
+                                      # List: 查询并脱敏credential_data (password去hash, passkey保留credential_id)
+    invite_service.go                 # InviteService: CreateInviteCode/ListInviteCodes (随机16字符hex码)
+    oauth2_service.go                 # OAuth2Service: GetAuthorizationURL/GetBindAuthorizationURL/HandleCallback/HandleBindCallback
+                                      # 支持 GitHub + Google, CSRF state存StateStore, 不自动绑定未注册用户
+    webauthn_service.go               # WebAuthnService: BeginRegistration/FinishRegistration/BeginLogin/FinishLogin
+                                      # 使用Discoverable Login (Passkey), challenge session存StateStore (5min TTL)
+    webauthn_user.go                  # webauthnUser适配器 (实现webauthn.User接口) + credentialFromIdentity/credentialToData序列化
+
+  oidc/
+    keys.go                           # RSA-2048密钥对生成，signingKey/publicKey实现op.SigningKey/op.Key
+    auth_request.go                   # AuthRequest实现op.AuthRequest接口, JSON序列化存储到StateStore
+    client.go                         # Client包装model.OIDCClient实现op.Client接口
+    storage.go                        # Storage实现op.Storage接口 (23+方法), 桥接Repository层
+                                      # auth_req/auth_code/access_token/refresh_token 均通过StateStore管理
+    provider.go                       # SetupProvider(): 初始化op.Provider, RSA密钥, SHA256加密
+
 pkg/
   jwt/jwt.go                          # JWT Manager: GenerateAccessToken/GenerateRefreshToken/GenerateIDToken/Validate (HS256)
+                                      # AccessTokenTTL()/RefreshTokenTTL() getter
   crypto/crypto.go                    # HashPassword/CheckPassword(bcrypt) + GenerateRandomString/GenerateClientSecret/GenerateInviteCode
-  response/response.go                # 统一API响应 {code,message,data} + Success/Error/BadRequest/Unauthorized/InternalError
+  response/response.go                # 统一API响应 {code,message,data} + Success/Error/BadRequest/Unauthorized/Forbidden/Conflict/InternalError
 ```
 
 ### 配置 (config.yaml)
-server(host/port/mode/timeout) | database.postgres(连接池) | database.redis | state.backend("redis"|"memory") | jwt(signing_key/issuer/TTL) | invite.enabled | cors | log(level/format)
+server(host/port/mode/timeout) | database.postgres(连接池) | database.redis | state.backend("redis"|"memory")
+jwt(signing_key/issuer/TTL) | invite.enabled | admin.user_ids(管理员UUID列表)
+oidc(issuer/crypto_key/login_url) | oauth2.github/google(client_id/secret/redirect_url/scopes)
+webauthn(rp_display_name/rp_id/rp_origins) | cors | log(level/format)
 
 ### API路由
-- GET  /healthz                    → 健康检查
-- POST /api/v1/auth/register       → 注册 (TODO)
-- POST /api/v1/auth/login          → 登录 (TODO)
-- POST /api/v1/auth/refresh        → 刷新token (TODO)
-- POST /api/v1/auth/logout         → 登出 (需JWT) (TODO)
+公开:
+- GET  /healthz                                      → 健康检查
+- POST /api/v1/auth/register                         → 注册 (identity_type + identifier + credential_data + invite_code?)
+- POST /api/v1/auth/login                            → 密码登录 → TokenSet
+- POST /api/v1/auth/refresh                          → 刷新token (Token Rotation)
+- GET  /api/v1/auth/oauth2/:provider/authorize       → OAuth2社交登录跳转 (github/google)
+- GET  /api/v1/auth/oauth2/:provider/callback        → OAuth2回调 → TokenSet
+- POST /api/v1/auth/passkey/login/begin              → Passkey免密登录开始 → challenge
+- POST /api/v1/auth/passkey/login/finish             → Passkey登录完成 → TokenSet
+
+需JWT:
+- POST /api/v1/auth/logout                           → 登出 (撤销refresh token)
+- POST /api/v1/identities/bind                       → 绑定新身份
+- DELETE /api/v1/identities/:id                      → 解绑身份 (不允许解绑最后一个)
+- GET  /api/v1/identities                            → 列表身份 (脱敏)
+- POST /api/v1/identities/oauth2/:provider/bind      → OAuth2绑定跳转
+- GET  /api/v1/identities/oauth2/:provider/callback  → OAuth2绑定回调
+- POST /api/v1/auth/passkey/register/begin           → Passkey注册开始
+- POST /api/v1/auth/passkey/register/finish          → Passkey注册完成
+- POST /api/v1/oidc/login/complete                   → OIDC登录完成 (标记AuthRequest)
+
+需JWT + Admin:
+- POST /api/v1/admin/invite-codes                    → 创建邀请码
+- GET  /api/v1/admin/invite-codes                    → 列表邀请码
+
+OIDC Provider (zitadel/oidc自动挂载):
+- GET  /oidc/.well-known/openid-configuration
+- GET  /oidc/authorize | POST /oidc/token | GET /oidc/userinfo | GET /oidc/keys
+
+### StateStore Key 规范
+| 用途 | Key 格式 | Value | TTL |
+|------|----------|-------|-----|
+| Refresh Token JTI | refresh_token:{jti} | userID string | 与token过期对齐 |
+| OIDC Auth Request | oidc_auth_req:{id} | JSON(AuthRequest) | 10min |
+| OIDC Auth Code | oidc_code:{code} | JSON(auth_req_id) | 5min |
+| OIDC Access Token | oidc_access:{tokenID} | JSON(tokenInfo) | accessTTL |
+| OIDC Refresh Token | oidc_refresh:{token} | JSON(refreshTokenInfo) | refreshTTL |
+| WebAuthn 注册Session | webauthn_reg:{sessionID} | JSON(SessionData) | 5min |
+| WebAuthn 登录Session | webauthn_login:{sessionID} | JSON(SessionData) | 5min |
+| OAuth2 CSRF State | oauth2_state:{token} | JSON(stateData) | 10min |
 
 ### 关键设计
-1. Passwordless架构: users表不存密码，凭据在user_identities表中按identity_type分类存储
-2. StateStore接口: 云原生抽象，config中选redis或memory，用于refresh token/OIDC code/WebAuthn challenge存储
-3. 所有Service/Handler方法目前为TODO stub，待后续实现具体业务逻辑
-4. 支持阿里云FC Custom Runtime部署: 标准HTTP server + 环境变量覆盖配置 + graceful shutdown
+1. Passwordless架构: users表不存密码，凭据在user_identities表中按identity_type分类存储(JSONB)
+2. StateStore接口: 云原生抽象，config中选redis或memory，统一管理所有临时状态
+3. Token Rotation: refresh时旧JTI删除+签发新token，防重放
+4. OIDC Provider: 基于zitadel/oidc v3, 支持Authorization Code + PKCE (S256), RSA-256签名
+5. Passkey/WebAuthn: Discoverable Login (无需输入用户名), credential存为identity
+6. OAuth2社交登录: 仅登录不自动注册，需先绑定身份
+7. Admin权限: 基于config中的UUID白名单，非RBAC
+8. 支持阿里云FC Custom Runtime部署: 标准HTTP server + 环境变量覆盖配置 + graceful shutdown
